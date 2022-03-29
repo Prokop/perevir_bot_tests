@@ -6,6 +6,8 @@ const config = require('../config.json');
 const START_COMMAND = '/start';
 const SET_FAKES_COMMAND = '/setfakes ';
 const SEND_FAKES_COMMAND = '/sendfakes';
+const SET_BLACKSOURCE_COMMAND = '/setblacksource';
+const SET_WHITESOURCE_COMMAND = '/setwhitesource';
 
 const INITIAL_MESSAGE = 'Перевір - інформаційний бот для перевірки даних та повідомлення сумнівних новин.';
 const CHECK_CONTENT_MESSAGE = 'Надішліть чи перешліть матеріали які бажаєте перевірити';
@@ -14,6 +16,8 @@ const REQUEST_PENDING_MESSAGE = 'Команда вже обробляє дани
 const REQUEST_TRUE_MESSAGE = 'Ваше звернення визначено як правдиве';
 const REQUEST_FALSE_MESSAGE = 'Ваше звернення визначено як оманливе';
 const REQUEST_REJECT_MESSAGE = 'На жаль, ми не можемо підтвердити чи спростувати цю інформацію';
+const REQUEST_AUTODECLINE_MESSAGE = 'Високовірогідно - ФЕЙК, МАНІПУЛЯЦІЯ або ДЕЗІНФОРМАЦІЯ. Запит не перевірявся журналістами та фактчекерами і обробився автоматично.';
+const REQUEST_AUTOCONFIRM_MESSAGE = 'Високовірогідно - ВІДПОВІДАЛЬНА ІНФОРМАЦІЯ або ПРАВДА. Запит не перевірявся журналістами та фактчекерами і обробився автоматично.';
 const SEND_NEW_FAKES_MESSAGE = 'Надішліть нові фейки у відповідь на це повідомлення';
 const CONFIRM_SEND_FAKES_MESSAGE = 'Надіслати актуальні фейки користувачам?';
 const FAKES_SAVED_MESSAGE = 'Зміни збережено';
@@ -21,6 +25,8 @@ const PENDING_MESSAGE = '#pending';
 const RESOLVED_TRUE_MESSAGE = '#resolved | #true | Правда'
 const RESOLVED_FALSE_MESSAGE = '#resolved | #false | Фейк'
 const RESOLVED_REJECT_MESSAGE = '#resolved | #reject | Відмова'
+const AUTODECLINE_MESSAGE = '#autoDecline';
+const AUTOCONFIRM_MESSAGE = '#autoConfirm';
 
 const CHECK_CONTENT_OPTION = 'Перевірити контент';
 const RELEVANT_FAKES_OPTION = '🔥 Актуальні фейки';
@@ -82,7 +88,7 @@ test.describe('Process true request', () => {
     await startBot(page);
   });
 
-  test('It is possible to set new request as True', async ({ page }) => {
+  test('Moderator is able to set new request as True', async ({ page }) => {
     await sendMessage(page, textRequest);
     await verifyLastMessageContainsText(page, STARTED_CONTENT_CHECK_MESSAGE);
 
@@ -113,7 +119,7 @@ test.describe('Process false request', () => {
     await startBot(page);
   });
 
-  test('It is possible to set new request as False', async ({ page }) => {
+  test('Moderator is able to set new request as False', async ({ page }) => {
     await sendMessage(page, textRequest);
     await verifyLastMessageContainsText(page, STARTED_CONTENT_CHECK_MESSAGE);
 
@@ -144,7 +150,7 @@ test.describe('Process rejected request', () => {
     await startBot(page);
   });
 
-  test('It is possible to set new request as Rejected', async ({ page }) => {
+  test('Moderator is able to set new request as Rejected', async ({ page }) => {
     await sendMessage(page, textRequest);
     await verifyLastMessageContainsText(page, STARTED_CONTENT_CHECK_MESSAGE);
 
@@ -178,7 +184,7 @@ test.describe('Comment request', () => {
     await startBot(page);
   });
 
-  test('It is possible to leave comment to new request', async ({ page }) => {
+  test('Moderator is able to leave comment to new request', async ({ page }) => {
     await sendMessage(page, textRequest1);
     await verifyLastMessageContainsText(page, STARTED_CONTENT_CHECK_MESSAGE);
 
@@ -198,7 +204,7 @@ test.describe('Comment request', () => {
     await verifyLastMessageContainsText(page, comment1);
   });
 
-  test('It is possible to leave comment to resolved request', async ({ page }) => {
+  test('Moderator is abl to leave comment to resolved request', async ({ page }) => {
     await sendMessage(page, textRequest2);
     await verifyLastMessageContainsText(page, STARTED_CONTENT_CHECK_MESSAGE);
 
@@ -230,7 +236,7 @@ test.describe('Comment request', () => {
 test.describe('Change status', () => {
   const textRequest = chance.paragraph({ sentences: 2 });
 
-  test('It is possible to change status of resolved request', async ({ page }) => {
+  test('Moderator is able to change status of resolved request', async ({ page }) => {
     await openTelegram(page);
     await openChat(page, config.botName, config.botId);
     await startBot(page);
@@ -285,6 +291,62 @@ test.describe('Relevant fakes', () => {
     await selectKeyboardOption(page, RELEVANT_FAKES_OPTION);
     await verifyLastMessageContainsText(page, relevantFakes);
     await verifyLastMessageHasReplyOptions(page, [UNSUBSCRIBE_OPTION]);
+  });
+});
+
+test.describe('Blacklist', () => {
+  const domain = chance.domain();
+  const description = chance.paragraph({ sentences: 1 });
+  const url = chance.url({domain: domain});
+
+  test.beforeEach(async ({ page }) => {
+    await openTelegram(page);
+    await openChat(page, config.botName, config.botId);
+    await startBot(page);
+  });
+
+  test('Admin is able to add domain to blacklist', async ({ page }) => {
+    await sendMessage(page, `${SET_BLACKSOURCE_COMMAND} https://${domain} ${description}`);
+    await verifyLastMessageContainsText(page, `Домен ${domain} успішно додано. Опис: ${description}`);
+  });
+
+  test('Resource from blacklist is auto-declined', async ({ page }) => {
+    await sendMessage(page, url);
+    await verifyLastMessageContainsText(page, REQUEST_AUTODECLINE_MESSAGE);
+    await verifyLastMessageContainsText(page, description);
+
+    await openChat(page, config.moderatorsChannelName, config.moderatorsChannelId);
+    await verifyLastMessageContainsReplyToText(page, url);
+    await verifyLastMessageContainsText(page, AUTODECLINE_MESSAGE);
+    await verifyLastMessageHasReplyOptions(page, [CHANGE_STATUS_OPTION, LEAVE_COMMENT_OPTION]);
+  });
+});
+
+test.describe('Whitelist', () => {
+  const domain = chance.domain();
+  const description = chance.paragraph({ sentences: 1 });
+  const url = chance.url({domain: domain});
+
+  test.beforeEach(async ({ page }) => {
+    await openTelegram(page);
+    await openChat(page, config.botName, config.botId);
+    await startBot(page);
+  });
+
+  test('Admin is able to add domain to whitelist', async ({ page }) => {
+    await sendMessage(page, `${SET_WHITESOURCE_COMMAND} https://${domain} ${description}`);
+    await verifyLastMessageContainsText(page, `Домен ${domain} успішно додано. Опис: ${description}`);
+  });
+
+  test('Resource from whitelist is auto-confirmed', async ({ page }) => {
+    await sendMessage(page, url);
+    await verifyLastMessageContainsText(page, REQUEST_AUTOCONFIRM_MESSAGE);
+    await verifyLastMessageContainsText(page, description);
+
+    await openChat(page, config.moderatorsChannelName, config.moderatorsChannelId);
+    await verifyLastMessageContainsReplyToText(page, url);
+    await verifyLastMessageContainsText(page, AUTOCONFIRM_MESSAGE);
+    await verifyLastMessageHasReplyOptions(page, [CHANGE_STATUS_OPTION, LEAVE_COMMENT_OPTION]);
   });
 });
 
