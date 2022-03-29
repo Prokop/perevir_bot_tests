@@ -29,6 +29,7 @@ const FALSE_OPTION = 'Фейк';
 const REJECT_OPTION = 'Відмова';
 const LEAVE_COMMENT_OPTION = 'Залишити коментар';
 const CHANGE_STATUS_OPTION = 'Змінити статус';
+const DEFAULT_ANSWER_OPTION = 'Шаблонна відповідь';
 const YES_OPTION = 'Так';
 const NO_OPTION = 'Ні';
 const UNSUBSCRIBE_OPTION = 'Відмовитися від підбірок';
@@ -152,7 +153,7 @@ test.describe('Process rejected request', () => {
 
     await selectLastMessageReplyOption(page, REJECT_OPTION);
     await verifyLastMessageContainsText(page, RESOLVED_REJECT_MESSAGE);
-    await verifyLastMessageHasReplyOptions(page, [CHANGE_STATUS_OPTION, LEAVE_COMMENT_OPTION]);
+    await verifyLastMessageHasReplyOptions(page, [CHANGE_STATUS_OPTION, LEAVE_COMMENT_OPTION, DEFAULT_ANSWER_OPTION]);
 
     await openChat(page, config.botName, config.botId);
     await verifyLastMessageContainsReplyToText(page, textRequest);
